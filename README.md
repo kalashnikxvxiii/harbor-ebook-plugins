@@ -16,7 +16,7 @@ Plugins for Harbor's eBook section.
    `repo.json`:
 
    ```
-   https://raw.githubusercontent.com/kalashnikxvxiii/harbor-ebook-plugins/main/repo.json
+   https://raw.githubusercontent.com/kalashnikxvxiii/harbor-ebook-plugins/master/repo.json
    ```
 
 3. Install the plugins from the list.
