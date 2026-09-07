@@ -250,6 +250,19 @@ Two details behind those numbers:
 - **Standard Ebooks' OPDS feed is not usable**: it answers 401, so listings are
   scraped from the HTML catalogue instead.
 
+## Testing
+
+`tools/` runs a plugin inside Harbor's real sandbox, against the live source:
+
+```bash
+node tools/run-plugin.mjs liberliber.js tools/probe.mjs
+QUERY="verga" node tools/run-plugin.mjs wikisource-it.js tools/probe.mjs
+```
+
+See `tools/README.md`. The sandbox is lifted from a local Harbor checkout rather
+than vendored, so a plugin is never validated against a browser DOM it will not
+get at runtime.
+
 ## Development
 
 The source is copied into Harbor at install time and never refreshes on its own:
