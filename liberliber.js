@@ -301,12 +301,21 @@ var FORMATS = [
 async function fileUrlFor(workId) {
   var page = await getHtml(workId);
   if (!page) return null;
-  var op = page.match(/[?&]op=(\d+)/);
+  /* Editions with nothing to download still render the template, with
+   * op=0 and no opera_url_* links at all. Taking the first match would
+   * send two pointless requests before giving up, so zero is skipped
+   * and the first real id wins. */
+  var op = "";
+  var ids = page.match(/[?&]op=(\d+)/g) || [];
+  for (var k = 0; k < ids.length; k++) {
+    var n = ids[k].replace(/\D/g, "");
+    if (n && n !== "0") { op = n; break; }
+  }
   if (!op) return null;
   for (var i = 0; i < FORMATS.length; i++) {
     /* The download page is a redirect shim: it answers with HTML that
      * carries the real address, on the liberliber.eu media host. */
-    var shim = await getHtml("/opere/download/?op=" + op[1] + "&type=" + FORMATS[i].type);
+    var shim = await getHtml("/opere/download/?op=" + op + "&type=" + FORMATS[i].type);
     if (!shim) continue;
     var ext = FORMATS[i].ext;
     var re = new RegExp("https?://[^\\s\"']*/" + ext + "/[^\\s\"']+\\." + ext, "i");

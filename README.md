@@ -195,6 +195,10 @@ the catalogue:
 4. the file       liberliber.eu/mediateca/libri/.../odt/<name>.odt
 ```
 
+Some editions have no downloadable file at all: the page still renders, with
+`op=0` and no `opera_url_*` links. Those return no chapters, and the zero id is
+skipped so the plugin does not send two pointless requests before giving up.
+
 Not every edition is published in every format — some works offer only PDF and
 ODT, others only PDF and TXT — so the readable formats are tried in order of how
 much structure they keep: ODT first, then the plain transcript, which is
