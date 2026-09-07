@@ -8,6 +8,7 @@ Plugins for Harbor's eBook section.
 - **BookFrom.net** — HTML source, books served as paginated chunks.
 - **Standard Ebooks** — downloads the `.epub` and unpacks it in the sandbox, so
   a whole book costs one request.
+- **Liber Liber** — curated Italian public-domain editions, read from the ODT.
 - **Internet Archive** (`it`, `en`) — 432k Italian texts through the search API,
   read from the OCR transcript; the English edition changes three constants.
 
@@ -173,6 +174,38 @@ Two limits worth knowing:
   and misread characters come through with it. Descriptions are uneven too — one
   item's was the single character `1` — so anything under 20 characters is
   dropped rather than shown.
+
+## Liber Liber
+
+Transcribed rather than scanned, so the text is clean and the chapter divisions
+are real — the opposite trade to the Internet Archive, which is vast but OCR'd.
+
+Books come from the **ODT**, a ZIP holding `content.xml`, where `<text:h>` marks
+a heading and `<text:p>` a paragraph. Those map onto chapters and bodies
+directly. The PDF the site also offers is unreadable here: the sandbox has no
+PDF parser.
+
+Opening a book walks four hops, because the file sits on a different host than
+the catalogue:
+
+```
+1. work page      /autori/autori-<x>/<author>/<work>/
+2. numeric id     op=<n>, found in that page
+3. download shim  /opere/download/?op=<n>&type=opera_url_odt
+4. the file       liberliber.eu/mediateca/libri/.../odt/<name>.odt
+```
+
+Two details behind the parser:
+
+- **ODF encodes whitespace as elements.** Runs of spaces are `<text:s text:c="n"/>`,
+  tabs and line breaks likewise. They are restored before tags are stripped,
+  otherwise words weld together at every one of them.
+- **Headings with no body under them are dropped.** Covers and half-titles carry
+  a heading and nothing else, and would show as empty chapters.
+
+Browsing rides on search: the site has no listing of works in its HTML — the
+catalogue pages are navigation, and the author index does not put the works in
+the markup — so `popular` runs a broad search instead.
 
 ## Listing performance
 

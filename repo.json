@@ -49,6 +49,14 @@
       "lang": "en",
       "nsfw": false,
       "entry": "archive-en.js"
+    },
+    {
+      "id": "liberliber",
+      "name": "Liber Liber",
+      "version": "1.0.0",
+      "lang": "it",
+      "nsfw": false,
+      "entry": "liberliber.js"
     }
   ]
 }
