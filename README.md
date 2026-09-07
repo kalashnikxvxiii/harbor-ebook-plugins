@@ -195,13 +195,24 @@ the catalogue:
 4. the file       liberliber.eu/mediateca/libri/.../odt/<name>.odt
 ```
 
-Two details behind the parser:
+Not every edition is published in every format — some works offer only PDF and
+ODT, others only PDF and TXT — so the readable formats are tried in order of how
+much structure they keep: ODT first, then the plain transcript, which is
+sectioned by length the way the Internet Archive text is. PDF is skipped: there
+is no parser for it in the sandbox.
+
+Three details behind the parser:
 
 - **ODF encodes whitespace as elements.** Runs of spaces are `<text:s text:c="n"/>`,
   tabs and line breaks likewise. They are restored before tags are stripped,
   otherwise words weld together at every one of them.
 - **Headings with no body under them are dropped.** Covers and half-titles carry
-  a heading and nothing else, and would show as empty chapters.
+  a heading and nothing else, and would show as empty chapters. The project's
+  own colophon, which every edition carries as a chapter called *Liber Liber*,
+  goes with them.
+- **A heading can contain a line break.** `<text:line-break/>` becomes a newline,
+  which is right inside a paragraph and wrong in a chapter title, so titles get
+  their whitespace collapsed.
 
 Browsing rides on search: the site has no listing of works in its HTML — the
 catalogue pages are navigation, and the author index does not put the works in

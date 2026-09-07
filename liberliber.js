@@ -208,7 +208,9 @@ function parseOdt(xml) {
     var text = step[3] === undefined ? "" : odfText(step[3]);
     if (kind === "h") {
       if (current.title || current.paragraphs.length) chapters.push(current);
-      current = { title: text, paragraphs: [] };
+      /* A heading can carry <text:line-break/>, which odfText turns into
+       * a newline: fine inside a paragraph, wrong in a chapter title. */
+      current = { title: text.replace(/\s+/g, " ").trim(), paragraphs: [] };
     } else if (text) {
       current.paragraphs.push(text);
     }
@@ -218,7 +220,11 @@ function parseOdt(xml) {
    * would show as empty chapters in the reader. */
   var out = [];
   for (var i = 0; i < chapters.length; i++) {
-    if (chapters[i].paragraphs.length) out.push(chapters[i]);
+    if (!chapters[i].paragraphs.length) continue;
+    /* Every Liber Liber edition carries the project's own colophon as a
+     * chapter of its own. It is not part of the work. */
+    if (/^liber liber$/i.test(chapters[i].title)) continue;
+    out.push(chapters[i]);
   }
   return out;
 }
@@ -283,23 +289,65 @@ function searchPath(query) {
   };
 }
 
-async function odtUrlFor(workId) {
+/* Not every edition is published in every format: some works offer only
+ * PDF and ODT, others only PDF and TXT. PDF is useless here — there is
+ * no parser for it in the sandbox — so the readable formats are tried in
+ * order of how much structure they preserve. */
+var FORMATS = [
+  { type: "opera_url_odt", ext: "odt" },
+  { type: "opera_url_txt", ext: "txt" }
+];
+
+async function fileUrlFor(workId) {
   var page = await getHtml(workId);
-  if (!page) return "";
+  if (!page) return null;
   var op = page.match(/[?&]op=(\d+)/);
-  if (!op) return "";
-  /* The download page is a redirect shim: it answers with HTML that
-   * carries the real address, on the liberliber.eu media host. */
-  var shim = await getHtml("/opere/download/?op=" + op[1] + "&type=opera_url_odt");
-  var file = shim.match(/https?:\/\/[^\s"']*\/odt\/[^\s"']+\.odt/i);
-  return file ? file[0] : "";
+  if (!op) return null;
+  for (var i = 0; i < FORMATS.length; i++) {
+    /* The download page is a redirect shim: it answers with HTML that
+     * carries the real address, on the liberliber.eu media host. */
+    var shim = await getHtml("/opere/download/?op=" + op[1] + "&type=" + FORMATS[i].type);
+    if (!shim) continue;
+    var ext = FORMATS[i].ext;
+    var re = new RegExp("https?://[^\\s\"']*/" + ext + "/[^\\s\"']+\\." + ext, "i");
+    var hit = shim.match(re);
+    if (hit) return { url: hit[0], ext: ext };
+  }
+  return null;
+}
+
+/* A plain transcript has no headings to cut on, so it is sectioned by
+ * length at paragraph boundaries, the same way the Internet Archive
+ * plugin handles its OCR text. */
+function sectionsFromText(text) {
+  var paragraphs = text.replace(/\r/g, "").split(/\n{2,}/);
+  var out = [], current = [], size = 0;
+  for (var i = 0; i < paragraphs.length; i++) {
+    var p = paragraphs[i].replace(/[ \t]+/g, " ").trim();
+    if (!p) continue;
+    current.push(p);
+    size += p.length + 2;
+    if (size >= 40000) { out.push({ title: "", paragraphs: current }); current = []; size = 0; }
+  }
+  if (current.length) out.push({ title: "", paragraphs: current });
+  return out;
 }
 
 async function loadBook(id) {
   if (openBook && openBook.id === id) return openBook;
-  var url = await odtUrlFor(id);
-  if (!url) return null;
-  var res = await request(url, "base64");
+  var found = await fileUrlFor(id);
+  if (!found) return null;
+
+  if (found.ext === "txt") {
+    var plain = await request(found.url, "text");
+    if (!plain || !plain.body) return null;
+    var sections = sectionsFromText(plain.body);
+    if (!sections.length) return null;
+    openBook = { id: id, chapters: sections };
+    return openBook;
+  }
+
+  var res = await request(found.url, "base64");
   if (!res || !res.body) return null;
   var bytes = base64ToBytes(res.body);
   if (!bytes.length || bytes.length > MAX_ODT_BYTES) return null;
