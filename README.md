@@ -6,6 +6,8 @@ Plugins for Harbor's eBook section.
   scraping that breaks on a redesign, and the same logic works for every
   language edition.
 - **BookFrom.net** — HTML source, books served as paginated chunks.
+- **Standard Ebooks** — downloads the `.epub` and unpacks it in the sandbox, so
+  a whole book costs one request.
 
 ## Installing in Harbor
 
@@ -95,6 +97,37 @@ Three things that needed fixing after the first run:
 - **The first `<img>` on a book page is a tracking pixel**, not the cover; covers
   always come from the `picture.bookfrom.net` subdomain.
 
+## Standard Ebooks — the EPUB engine
+
+This one does not scrape chapter pages. It fetches the `.epub` as base64,
+reads the ZIP central directory, inflates entries with `DecompressionStream`,
+then walks `META-INF/container.xml` → OPF → spine to get the reading order, and
+the navigation document for chapter titles.
+
+The machinery is deliberately kept apart from the few functions that locate a
+book on the site. Pointing it at a different EPUB source means rewriting
+`findEpubUrl` and the listing helpers, nothing else.
+
+Measured on *Pride and Prejudice* (832 KB, 84 zip entries, 65 spine items):
+download and unpack took 1083 ms, and a chapter served from the cached book
+71 ms. One book is kept unpacked at a time, which spares a re-download per
+chapter without letting the worker grow unbounded.
+
+Three things worth knowing:
+
+- **`Response` is removed from the sandbox**, so the usual
+  `new Response(stream).arrayBuffer()` is unavailable. The inflate path drives
+  `DecompressionStream`'s reader directly instead.
+- **The OPF and navigation documents are parsed with regular expressions**, not
+  `harbor.parseHtml`: an HTML parser mangles unknown XML elements differently on
+  different engines, while the chapter XHTML itself parses fine.
+- **The download link needs `?source=download`.** Without it the server returns
+  an interstitial page that meta-refreshes to the real file, and the plugin gets
+  8 KB of HTML instead of the book.
+
+Both EPUB 2 (NCX) and EPUB 3 (nav) tables of contents are read, so the engine is
+not tied to one generation of the format.
+
 ## Known limitations
 
 - **Poetry loses its line breaks.** The sandbox only exposes `.text()`, which
@@ -106,6 +139,8 @@ Three things that needed fixing after the first run:
   blurbs; the only long block is the pointer to Wikipedia, which is dropped on
   purpose.
 - **Covers are rare**: few works have an associated image.
+- **Standard Ebooks' OPDS feed is not usable**: it answers 401, so listings are
+  scraped from the HTML catalogue instead.
 
 ## Development
 

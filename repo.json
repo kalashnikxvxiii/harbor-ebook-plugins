@@ -25,6 +25,14 @@
       "lang": "en",
       "nsfw": false,
       "entry": "bookfrom.js"
+    },
+    {
+      "id": "standardebooks",
+      "name": "Standard Ebooks",
+      "version": "1.0.0",
+      "lang": "en",
+      "nsfw": false,
+      "entry": "standardebooks.js"
     }
   ]
 }
