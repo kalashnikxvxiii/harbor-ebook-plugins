@@ -1,0 +1,30 @@
+{
+  "name": "Harbor eBook — personal sources",
+  "type": "ebook",
+  "plugins": [
+    {
+      "id": "wikisource-it",
+      "name": "Wikisource (italiano)",
+      "version": "1.0.0",
+      "lang": "it",
+      "nsfw": false,
+      "entry": "wikisource-it.js"
+    },
+    {
+      "id": "wikisource-en",
+      "name": "Wikisource (English)",
+      "version": "1.0.0",
+      "lang": "en",
+      "nsfw": false,
+      "entry": "wikisource-en.js"
+    },
+    {
+      "id": "bookfrom",
+      "name": "BookFrom.net",
+      "version": "1.0.0",
+      "lang": "en",
+      "nsfw": false,
+      "entry": "bookfrom.js"
+    }
+  ]
+}
