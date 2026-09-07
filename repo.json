@@ -41,6 +41,14 @@
       "lang": "it",
       "nsfw": false,
       "entry": "archive-it.js"
+    },
+    {
+      "id": "archive-en",
+      "name": "Internet Archive (English)",
+      "version": "1.0.0",
+      "lang": "en",
+      "nsfw": false,
+      "entry": "archive-en.js"
     }
   ]
 }

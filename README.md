@@ -8,8 +8,8 @@ Plugins for Harbor's eBook section.
 - **BookFrom.net** — HTML source, books served as paginated chunks.
 - **Standard Ebooks** — downloads the `.epub` and unpacks it in the sandbox, so
   a whole book costs one request.
-- **Internet Archive (italiano)** — 432k Italian texts through the search API,
-  read from the OCR transcript.
+- **Internet Archive** (`it`, `en`) — 432k Italian texts through the search API,
+  read from the OCR transcript; the English edition changes three constants.
 
 ## Installing in Harbor
 
