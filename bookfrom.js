@@ -17,11 +17,22 @@
 
 var SITE = "https://www.bookfrom.net";
 var BROWSE_GENRE = "fiction";
-var PER_PAGE = 16;
+/* A genre page carries 16 articles but only 15 are books, so asking for
+ * 16 forced a second fetch for every first page. Twelve fits inside one
+ * fetch and leaves headroom if a page comes back short. */
+var PER_PAGE = 12;
 var UA = "Mozilla/5.0 (X11; Linux x86_64; rv:141.0) Gecko/20100101 Firefox/141.0";
 
 var lastCallAt = 0;
 var MIN_GAP_MS = 300;
+
+/* Listings are accumulated per key and served in slices. The site does
+ * not hand back a fixed page size — a genre page carries 16 entries but
+ * a search answers with a hundred at once — so returning a whole page
+ * flooded the caller with covers and then advanced its cursor past
+ * everything that followed. Fetching once and slicing keeps the page
+ * size honest and makes going back to a listing free. */
+var listCache = {};
 
 function sleep(ms) {
   return new Promise(function (r) { setTimeout(r, ms); });
@@ -222,24 +233,39 @@ function textOf(html) {
 
 /* --- provider ------------------------------------------------------- */
 
+async function serveList(key, makeUrl, offset) {
+  var st = listCache[key];
+  if (!st) st = listCache[key] = { items: [], seen: {}, nextPage: 1, done: false };
+  var guard = 0;
+  while (!st.done && st.items.length < offset + PER_PAGE && guard++ < 8) {
+    var got = itemsFrom(await getDoc(makeUrl(st.nextPage)));
+    st.nextPage++;
+    if (!got.length) { st.done = true; break; }
+    for (var i = 0; i < got.length; i++) {
+      if (st.seen[got[i].id]) continue;
+      st.seen[got[i].id] = true;
+      st.items.push(got[i]);
+    }
+  }
+  return st.items.slice(offset, offset + PER_PAGE);
+}
+
 var plugin = {
   id: "bookfrom",
   name: "BookFrom.net",
 
   popular: async function (offset) {
-    offset = offset || 0;
-    var page = Math.floor(offset / PER_PAGE) + 1;
-    var path = "/" + BROWSE_GENRE + "/" + (page > 1 ? "page/" + page + "/" : "");
-    return itemsFrom(await getDoc(path));
+    return serveList("genre:" + BROWSE_GENRE, function (page) {
+      return "/" + BROWSE_GENRE + "/" + (page > 1 ? "page/" + page + "/" : "");
+    }, offset || 0);
   },
 
   search: async function (query, offset) {
     if (!query) return [];
-    offset = offset || 0;
-    var page = Math.floor(offset / PER_PAGE) + 1;
-    var path = "/build_in_search/?q=" + encodeURIComponent(query) +
-               (page > 1 ? "&page=" + page : "");
-    return itemsFrom(await getDoc(path));
+    return serveList("query:" + query, function (page) {
+      return "/build_in_search/?q=" + encodeURIComponent(query) +
+             (page > 1 ? "&page=" + page : "");
+    }, offset || 0);
   },
 
   detail: async function (id) {

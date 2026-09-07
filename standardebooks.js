@@ -24,6 +24,10 @@ var MAX_EPUB_BYTES = 25 * 1024 * 1024;
 var lastCallAt = 0;
 var MIN_GAP_MS = 300;
 
+/* Listings are accumulated per key and served in slices, so paging back
+ * to a listing already fetched costs nothing. */
+var listCache = {};
+
 /* One book is kept unpacked in memory. Harbor reads a book's chapters
  * one after another, so a single slot spares a re-download per chapter
  * without letting the worker grow unbounded. */
@@ -316,22 +320,36 @@ async function findEpubUrl(bookPath) {
 
 /* --- provider ------------------------------------------------------- */
 
+async function serveList(key, makeUrl, offset) {
+  var st = listCache[key];
+  if (!st) st = listCache[key] = { items: [], seen: {}, nextPage: 1, done: false };
+  var guard = 0;
+  while (!st.done && st.items.length < offset + PER_PAGE && guard++ < 8) {
+    var got = itemsFrom(await getDoc(makeUrl(st.nextPage)));
+    st.nextPage++;
+    if (!got.length) { st.done = true; break; }
+    for (var i = 0; i < got.length; i++) {
+      if (st.seen[got[i].id]) continue;
+      st.seen[got[i].id] = true;
+      st.items.push(got[i]);
+    }
+  }
+  return st.items.slice(offset, offset + PER_PAGE);
+}
+
 var plugin = {
   id: "standardebooks",
   name: "Standard Ebooks",
 
   popular: async function (offset) {
-    offset = offset || 0;
-    var page = Math.floor(offset / PER_PAGE) + 1;
-    return itemsFrom(await getDoc("/ebooks?page=" + page));
+    return serveList("all", function (page) { return "/ebooks?page=" + page; }, offset || 0);
   },
 
   search: async function (query, offset) {
     if (!query) return [];
-    offset = offset || 0;
-    var page = Math.floor(offset / PER_PAGE) + 1;
-    return itemsFrom(await getDoc(
-      "/ebooks?query=" + encodeURIComponent(query) + "&page=" + page));
+    return serveList("query:" + query, function (page) {
+      return "/ebooks?query=" + encodeURIComponent(query) + "&page=" + page;
+    }, offset || 0);
   },
 
   detail: async function (id) {

@@ -137,6 +137,35 @@ Three things worth knowing:
 Both EPUB 2 (NCX) and EPUB 3 (nav) tables of contents are read, so the engine is
 not tied to one generation of the format.
 
+## Listing performance
+
+All three plugins accumulate a listing per key and hand back fixed-size slices,
+instead of returning whatever one page of the site happens to hold.
+
+That started as a correctness fix. BookFrom's search answers with about a
+hundred entries at once while a genre page carries sixteen, so returning a whole
+page flooded the caller with covers and then advanced its cursor past everything
+that followed — page two was computed as page seven, and the rest was never
+seen.
+
+Measured before and after, per call:
+
+| | cold | repeat | search |
+|---|---|---|---|
+| Wikisource | 741 → 601 ms | 281 → **25 ms** | 472 → 238 ms |
+| BookFrom | 1077 → 974 ms | 957 → **25 ms** | 100 items → 12 |
+| Standard Ebooks | 622 → 521 ms | 255 → **25 ms** | 277 → 293 ms |
+
+Two details behind those numbers:
+
+- **Wikisource no longer looks up covers for a listing.** It cost an extra API
+  call per page, sitting behind the rate-limit gap, and hardly any work on
+  Wikisource carries an image, so nearly every one of those calls came back
+  empty. `detail` still fetches it for the book actually being opened.
+- **BookFrom serves twelve at a time, not sixteen.** A genre page holds sixteen
+  articles but only fifteen books, so asking for sixteen forced a second fetch
+  on every first page — which briefly made it slower, not faster.
+
 ## Known limitations
 
 - **Poetry loses its line breaks.** The sandbox only exposes `.text()`, which

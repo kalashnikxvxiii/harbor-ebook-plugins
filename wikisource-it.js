@@ -124,17 +124,16 @@ async function coversFor(titles) {
   return map;
 }
 
-async function toBooks(titles) {
-  if (!titles.length) return [];
-  var cov = {};
-  try { cov = await coversFor(titles); } catch (e) { cov = {}; }
+/* No cover lookup here on purpose. It costs an extra API call per page
+ * — with the throttle in front of it, the slowest part of opening a
+ * listing — and hardly any Wikisource work carries an image, so almost
+ * every one of those calls came back empty. detail() still fetches it
+ * for the one book actually being opened. */
+function toBooks(titles) {
   var out = [];
   for (var i = 0; i < titles.length; i++) {
     var t = titles[i];
-    out.push({
-      id: t, title: t, cover: cov[t],
-      originalLanguage: LANG, siteUrl: pageUrl(t)
-    });
+    out.push({ id: t, title: t, originalLanguage: LANG, siteUrl: pageUrl(t) });
   }
   return out;
 }
@@ -291,11 +290,11 @@ var plugin = {
     offset = offset || 0;
     var pop = await loadPopular();
     if (offset < pop.length) {
-      return await toBooks(pop.slice(offset, offset + PAGE_SIZE));
+      return toBooks(pop.slice(offset, offset + PAGE_SIZE));
     }
     var rel = offset - pop.length;
     await browseFill(rel + PAGE_SIZE);
-    return await toBooks(browseBuffer.slice(rel, rel + PAGE_SIZE));
+    return toBooks(browseBuffer.slice(rel, rel + PAGE_SIZE));
   },
 
   search: async function (query, offset) {
@@ -319,7 +318,7 @@ var plugin = {
       if (titles.indexOf(root) < 0) titles.push(root);
     }
     searchCursors[query + "|" + (offset + titles.length)] = apiOffset + rows.length;
-    return await toBooks(titles);
+    return toBooks(titles);
   },
 
   detail: async function (id) {
