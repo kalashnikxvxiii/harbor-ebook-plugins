@@ -8,6 +8,8 @@ Plugins for Harbor's eBook section.
 - **BookFrom.net** — HTML source, books served as paginated chunks.
 - **Standard Ebooks** — downloads the `.epub` and unpacks it in the sandbox, so
   a whole book costs one request.
+- **Internet Archive (italiano)** — 432k Italian texts through the search API,
+  read from the OCR transcript.
 
 ## Installing in Harbor
 
@@ -136,6 +138,41 @@ Three things worth knowing:
 
 Both EPUB 2 (NCX) and EPUB 3 (nav) tables of contents are read, so the engine is
 not tied to one generation of the format.
+
+## Internet Archive
+
+By far the largest reachable Italian holding: 432,130 texts with a downloadable
+transcript, reached through `advancedsearch.php` rather than a scraped
+catalogue. Metadata, cover and full text each cost one request.
+
+| method | approach |
+|---|---|
+| `popular` | the base query sorted by `downloads desc` |
+| `search` | the same query with the user's terms appended |
+| `detail` | `/metadata/<id>` |
+| `chapters` | `<id>_djvu.txt`, cut into ~40,000-character sections on paragraph boundaries |
+| `content` | served from the transcript held in memory |
+
+**The epub route was tried and dropped.** About 4,800 Italian items carry an
+`.epub`, so preferring it looked obvious — but Archive generates those from the
+page scans: *I promessi sposi* came back as 1,134 spine entries, one per scanned
+page, and all but a handful yielded no extractable text. The transcript is one
+clean run and sections into 74 parts of 40,000 characters. The EPUB engine still
+lives in `standardebooks.js`, where the files are made by hand and worth
+unpacking.
+
+Two limits worth knowing:
+
+- **`popular` is noisy.** Sorting 432k items by downloads surfaces newspaper
+  issues, magazine scans and works in other languages filed as Italian.
+  Excluding the periodical collections helps a little; narrowing to
+  `booksbylanguage_italian` cuts the corpus to 3,073 and to a literature subject
+  filter to 152, both worse trades. Archive's language metadata is simply
+  unreliable, and search is the real way into a library this size.
+- **The text is OCR of scans**, so quality varies: running heads, page numbers
+  and misread characters come through with it. Descriptions are uneven too — one
+  item's was the single character `1` — so anything under 20 characters is
+  dropped rather than shown.
 
 ## Listing performance
 

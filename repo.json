@@ -33,6 +33,14 @@
       "lang": "en",
       "nsfw": false,
       "entry": "standardebooks.js"
+    },
+    {
+      "id": "archive-it",
+      "name": "Internet Archive (italiano)",
+      "version": "1.0.0",
+      "lang": "it",
+      "nsfw": false,
+      "entry": "archive-it.js"
     }
   ]
 }
