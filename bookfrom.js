@@ -27,7 +27,7 @@ function sleep(ms) {
   return new Promise(function (r) { setTimeout(r, ms); });
 }
 
-async function getDoc(path, attempt) {
+async function getRaw(path, attempt) {
   attempt = attempt || 0;
   var gap = lastCallAt + MIN_GAP_MS - Date.now();
   if (gap > 0) await sleep(gap);
@@ -47,10 +47,15 @@ async function getDoc(path, attempt) {
   if (!res) return null;
   if ((res.status === 429 || res.status === 503) && attempt < 2) {
     await sleep(1500 * (attempt + 1));
-    return getDoc(path, attempt + 1);
+    return getRaw(path, attempt + 1);
   }
   if (!res.ok || !res.body) return null;
-  return await harbor.parseHtml(res.body);
+  return res.body;
+}
+
+async function getDoc(path) {
+  var body = await getRaw(path);
+  return body ? await harbor.parseHtml(body) : null;
 }
 
 /* Both link shapes collapse to the same id: the path alone. */
@@ -137,25 +142,82 @@ function chunkUrls(doc, bookPath) {
 
 /* --- text ----------------------------------------------------------- */
 
-function textOf(doc) {
-  if (!doc) return "";
-  var box = doc.querySelector("div.showfull");
-  if (!box) return "";
-  var nodes = box.querySelectorAll("p");
-  var parts = [];
-  for (var i = 0; i < nodes.length; i++) {
-    var t = nodes[i].text();
-    if (t) parts.push(t);
+/* The prose is NOT in div.showfull: that class wraps the whole page,
+ * header and search box included, which is why an early version leaked
+ * the site chrome into the first chapter. The chapter lives in
+ * div.text#textToRead, and it holds bare text nodes separated by <br>
+ * rather than paragraphs — barely ten <p> exist in the entire page.
+ *
+ * That is also why the extraction works on the raw HTML instead of the
+ * parsed document: the sandbox only exposes .text(), which collapses
+ * whitespace and would weld every line into one block. Turning <br>
+ * into newlines first keeps the paragraphing intact. */
+var ENTITIES = {
+  amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ",
+  hellip: "\u2026", mdash: "\u2014", ndash: "\u2013", rsquo: "\u2019",
+  lsquo: "\u2018", ldquo: "\u201c", rdquo: "\u201d", eacute: "\u00e9"
+};
+
+function decodeEntities(s) {
+  return s.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, function (whole, body) {
+    if (body.charAt(0) === "#") {
+      var code = body.charAt(1) === "x" || body.charAt(1) === "X"
+        ? parseInt(body.slice(2), 16)
+        : parseInt(body.slice(1), 10);
+      return code > 0 && code < 0x110000 ? String.fromCodePoint(code) : whole;
+    }
+    var hit = ENTITIES[body.toLowerCase()];
+    return hit === undefined ? whole : hit;
+  });
+}
+
+/* Walks div nesting from an opening tag to its own closing tag, so a
+ * container holding other divs is cut at the right place.
+ *
+ * Every match is tried and the biggest fragment wins: the page carries
+ * two elements with this id, and the first is an empty one left inside
+ * an HTML comment. Picking the first match silently returned 24 bytes. */
+function sliceContainer(html, openRe) {
+  var re = new RegExp(openRe.source, "gi");
+  var best = "", m;
+  while ((m = re.exec(html)) !== null) {
+    var from = m.index + m[0].length;
+    var scan = /<\/?div\b[^>]*>/gi;
+    scan.lastIndex = from;
+    var depth = 1, step, frag = null;
+    while ((step = scan.exec(html)) !== null) {
+      depth += step[0].charAt(1) === "/" ? -1 : 1;
+      if (depth === 0) { frag = html.slice(from, step.index); break; }
+    }
+    if (frag === null) frag = html.slice(from);
+    if (frag.length > best.length) best = frag;
+    re.lastIndex = from;
   }
-  var text = parts.join("\n\n");
-  /* Some chunks are laid out with <br> instead of paragraphs, which
-   * leaves no <p> to collect: fall back to the container itself. */
-  if (text.length < 200) {
-    var whole = "";
-    try { whole = box.text() || ""; } catch (e) { whole = ""; }
-    if (whole.length > text.length) text = whole;
+  return best;
+}
+
+function htmlToText(fragment) {
+  var s = fragment
+    .replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|h[1-6]|li|blockquote)\s*>/gi, "\n\n")
+    .replace(/<[^>]+>/g, "");
+  s = decodeEntities(s).replace(/\r/g, "");
+  var lines = s.split("\n");
+  for (var i = 0; i < lines.length; i++) {
+    lines[i] = lines[i].replace(/[ \t\u00a0]+/g, " ").trim();
   }
-  return text;
+  return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function textOf(html) {
+  if (!html) return "";
+  /* Comments first: the commented-out copy of the container would
+   * otherwise be a candidate. */
+  html = html.replace(/<!--[\s\S]*?-->/g, " ");
+  var body = sliceContainer(html, /<div\b[^>]*id\s*=\s*"textToRead"[^>]*>/i);
+  if (!body) body = sliceContainer(html, /<div\b[^>]*class\s*=\s*"[^"]*\btext\b[^"]*"[^>]*>/i);
+  return htmlToText(body);
 }
 
 /* --- provider ------------------------------------------------------- */
@@ -222,7 +284,7 @@ var plugin = {
   },
 
   content: async function (chapterId) {
-    return textOf(await getDoc(chapterId));
+    return textOf(await getRaw(chapterId));
   }
 };
 

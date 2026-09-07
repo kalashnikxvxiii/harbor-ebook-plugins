@@ -85,9 +85,9 @@ The site serves a whole book as numbered HTML chunks:
 | `search` | `/build_in_search/?q=…&page=N` — note the visible form on the site posts to a different path than the one that actually returns results |
 | `detail` | the `<title>` carries `Title (Author) » p.1 »`, the cleanest place to read the author off a book page |
 | `chapters` | only the highest `page,<n>,` link is read; the URLs in between are built rather than scraped, so a gap in the navigation cannot lose a chunk |
-| `content` | `div.showfull`, collecting `p` and falling back to the container when a chunk uses `<br>` instead of paragraphs |
+| `content` | `div.text#textToRead` on the raw HTML, with `<br>` turned into newlines |
 
-Three things that needed fixing after the first run:
+Four things that needed fixing after the first run:
 
 - **Listings and search return different link shapes** — genre pages use absolute
   URLs, the search endpoint relative ones. Both are normalised to a path, which
@@ -96,6 +96,15 @@ Three things that needed fixing after the first run:
   by path.
 - **The first `<img>` on a book page is a tracking pixel**, not the cover; covers
   always come from the `picture.bookfrom.net` subdomain.
+- **`div.showfull` is not the chapter, it is the page.** That class wraps the
+  header and the search box too, so the first version leaked the site chrome
+  into every chapter. The prose lives in `div.text#textToRead` — and the page
+  carries *two* elements with that id, the first an empty copy left inside an
+  HTML comment, so comments are stripped and the largest match wins.
+  Extraction runs on the raw HTML rather than the parsed document: the sandbox
+  only exposes `.text()`, which collapses whitespace and would weld the whole
+  chapter into a single block. Rewriting `<br>` as newlines first keeps the
+  paragraphing — barely ten `<p>` exist in an entire page.
 
 ## Standard Ebooks — the EPUB engine
 
